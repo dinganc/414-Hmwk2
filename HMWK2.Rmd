@@ -1,0 +1,113 @@
+---
+title: "HMWK2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prepared by Derek Chen, Justin Zipkin
+###load data
+```{r}
+library(nycflights13)
+nyc <- nycflights13::flights
+```
+###1.
+
+####a) Explore airgain data and answer the question - do airlines actually gain any time when in air on average?
+```{r}
+nyc$airgain=nyc$dep_delay-nyc$arr_delay
+average_airgain=mean(nyc$airgain,na.rm = TRUE)
+```
+#####   The average air gain time is `r average_airgain` mins, the positive value suggests that airlines actually gain time when in air on average
+
+####b) Calculate average airgain for different airlines. 
+```{r}
+average_airgain_by_carrier=tapply(nyc$airgain, nyc$carrier, mean,na.rm=TRUE)
+average_airgain_by_carrier=sort(average_airgain_by_carrier,decreasing = FALSE)
+average_airgain_by_carrier
+```
+#####   It seems like airline AS and HA gain most of the time in air, and F9 actually loses some time in air
+
+####c) Build a bar chart of average airgain for different airlines sorted by airgain. We want to graphically visualize which airlines are good at "catching up" when in air and which airlines actually lose time further after taking off.
+```{r}
+barplot(average_airgain_by_carrier,cex.names=.75)
+```
+
+#####   Only three airlines, MQ, FL, and F9 have a negative airgain time. The rest of airlines are good at catching up
+
+###2.
+```{r}
+sort(tapply(nyc$arr_delay, nyc$origin, mean,na.rm=TRUE),decreasing = TRUE)
+```
+#####   JFK airport has the least amount of arrival delay on average
+
+###3.
+```{r,eval==FALSE}
+optimal_airport_by_month=function(month_int){
+  sort(tapply(nyc$arr_delay[nyc$month==month_int], nyc$origin[nyc$month==month_int], mean,na.rm=TRUE),decreasing = FALSE)[1]
+}
+optimal_june=optimal_airport_by_month(6)
+```
+#####   The best airport to travel from in the month of June is `r attr(optimal_june,"names")`, with an average delay time of `r optimal_june` minutes
+
+###4.
+```{r}
+average_delay_by_departing_time=function(departing_time_lower,departing_time_upper,dest_arp){
+  
+  if (departing_time_upper>departing_time_lower)
+  {
+    tapply(nyc$arr_delay[nyc$sched_dep_time>departing_time_lower & 
+                           nyc$sched_dep_time<=departing_time_upper&nyc$dest==dest_arp],
+          nyc$month[nyc$sched_dep_time>departing_time_lower & 
+                      nyc$sched_dep_time<=departing_time_upper&nyc$dest==dest_arp],
+           mean,na.rm=TRUE)}
+  
+  else {tapply(rbind(nyc[nyc$sched_dep_time>departing_time_lower & nyc$dest==dest_arp,],
+                     nyc[nyc$sched_dep_time<=departing_time_upper & nyc$dest==dest_arp,])$arr_delay,
+               rbind(nyc[nyc$sched_dep_time>departing_time_lower & nyc$dest==dest_arp,],
+                     nyc[nyc$sched_dep_time<=departing_time_upper & nyc$dest==dest_arp,])$month,
+               mean,na.rm=TRUE)}
+}
+
+morning_delay=average_delay_by_departing_time(400,1200,"ATL")
+afternoon_delay=average_delay_by_departing_time(1200,1600,"ATL")
+evening_delay=average_delay_by_departing_time(1600,2000,"ATL")
+night_delay=average_delay_by_departing_time(2000,400,"ATL")
+
+plot(morning_delay,col="blue",ylab="Delay in mintues",xlab="Month",ylim=c(-20,150))
+points(afternoon_delay,col="red",ylab="",xaxt="n")
+points(evening_delay,col="green",ylab="",xaxt="n")
+points(night_delay,col="purple",ylab="",xaxt="n")
+axis(1, at = seq(1, 12, by = 1), las=1)
+legend(0.75,100,legend = c("Morning","Afternoon","Evening","Night"),col=c("blue","red","green","purple"),pch = 1,cex=.75)
+```
+
+#####   From the above graph, one can easily find which time period is best to travel, given the month. Night flights usually have the largest departing delays, while morning flights having the lowest. Morning is the best time to travel for the entire year except Feburary, where Evening is the best time to travel
+
+###5.
+```{r}
+library("ggplot2")
+define_time_o_day=function(departing_time)
+  {
+    if (is.na(departing_time)){NA}
+    else
+      {
+        if (departing_time<=1200&departing_time>400){"Morning"}
+        else if (departing_time<=1600&departing_time>1200){"Afternoon"}
+        else if (departing_time<=2000&departing_time>1600){"Evening"}
+        else if (departing_time<=400) {"Night"}
+        else if (departing_time>2000) {"Night"}
+    }
+}
+
+v_def=Vectorize(define_time_o_day)
+nyc$time.of.day=v_def(nyc$sched_dep_time)
+ploting=subset(nyc[,c("distance","airgain","origin","time.of.day")],!is.na(time.of.day))
+ggplot(data=subset(nyc[,c("distance","airgain","origin","time.of.day")],!is.na(time.of.day)),aes(distance,airgain))+
+  geom_smooth()+
+  facet_wrap(~origin+time.of.day,ncol=4)
+
+```
+
